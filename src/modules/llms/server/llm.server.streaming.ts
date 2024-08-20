@@ -6,19 +6,19 @@ import { createEmptyReadableStream, debugGenerateCurlCommand, nonTrpcServerFetch
 
 
 // Anthropic server imports
-import { AnthropicWireMessagesResponse, anthropicWireMessagesResponseSchema } from './anthropic/anthropic.wiretypes';
+import { AnthropicWire_API_Message_Create } from '~/modules/aix/server/dispatch/wiretypes/anthropic.wiretypes';
 import { anthropicAccess, anthropicAccessSchema, anthropicMessagesPayloadOrThrow } from './anthropic/anthropic.router';
 
 // Gemini server imports
+import { GeminiWire_API_Generate_Content } from '~/modules/aix/server/dispatch/wiretypes/gemini.wiretypes';
 import { geminiAccess, geminiAccessSchema, geminiGenerateContentTextPayload } from './gemini/gemini.router';
-import { geminiGeneratedContentResponseSchema, geminiModelsStreamGenerateContentPath } from './gemini/gemini.wiretypes';
 
 // Ollama server imports
-import { wireOllamaChunkedOutputSchema } from './ollama/ollama.wiretypes';
 import { OLLAMA_PATH_CHAT, ollamaAccess, ollamaAccessSchema, ollamaChatCompletionPayload } from './ollama/ollama.router';
+import { wireOllamaChunkedOutputSchema } from '~/modules/llms/server/ollama/ollama.wiretypes';
 
 // OpenAI server imports
-import type { OpenAIWire } from './openai/openai.wiretypes';
+import { OpenAIWire_API_Chat_Completions } from '~/modules/aix/server/dispatch/wiretypes/openai.wiretypes';
 import { openAIAccess, openAIAccessSchema, openAIChatCompletionPayload, openAIHistorySchema, openAIModelSchema } from './openai/openai.router';
 
 
@@ -51,7 +51,7 @@ type AIStreamParser = (data: string, eventType?: string) => { text: string, clos
 
 
 const chatStreamingInputSchema = z.object({
-  access: z.union([anthropicAccessSchema, geminiAccessSchema, ollamaAccessSchema, openAIAccessSchema]),
+  access: z.discriminatedUnion('dialect', [anthropicAccessSchema, geminiAccessSchema, ollamaAccessSchema, openAIAccessSchema]),
   model: openAIModelSchema,
   history: openAIHistorySchema,
   // NOTE: made it optional for now as we have some old requests without it
@@ -265,7 +265,7 @@ function createUpstreamTransformer(muxingFormat: MuxingFormat, vendorTextParser:
 /// Stream Parsers
 
 function createStreamParserAnthropicMessages(): AIStreamParser {
-  let responseMessage: AnthropicWireMessagesResponse | null = null;
+  let responseMessage: AnthropicWire_API_Message_Create.Response | null = null;
   let hasErrored = false;
 
   // Note: at this stage, the parser only returns the text content as text, which is streamed as text
@@ -287,7 +287,7 @@ function createStreamParserAnthropicMessages(): AIStreamParser {
       case 'message_start':
         const firstMessage = !responseMessage;
         const { message } = JSON.parse(data);
-        responseMessage = anthropicWireMessagesResponseSchema.parse(message);
+        responseMessage = AnthropicWire_API_Message_Create.Response_schema.parse(message);
         // hack: prepend the model name to the first packet
         if (firstMessage) {
           const firstPacket: ChatStreamingPreambleModelSchema = { model: responseMessage.model };
@@ -301,7 +301,7 @@ function createStreamParserAnthropicMessages(): AIStreamParser {
           const { index, content_block } = JSON.parse(data);
           if (responseMessage.content[index] === undefined)
             responseMessage.content[index] = content_block;
-          text = responseMessage.content[index].text;
+          text = (responseMessage.content[index] as any).text;
         } else
           throw new Error('Unexpected content block start');
         break;
@@ -314,7 +314,7 @@ function createStreamParserAnthropicMessages(): AIStreamParser {
             throw new Error(`Unexpected content block non-text delta (${delta.type})`);
           if (responseMessage.content[index] === undefined)
             throw new Error(`Unexpected content block delta location (${index})`);
-          responseMessage.content[index].text += delta.text;
+          (responseMessage.content[index] as any).text += delta.text;
           text = delta.text;
         } else
           throw new Error('Unexpected content block delta');
@@ -366,9 +366,9 @@ function createStreamParserGemini(modelName: string): AIStreamParser {
 
     // parse the JSON chunk
     const wireGenerationChunk = JSON.parse(data);
-    let generationChunk: ReturnType<typeof geminiGeneratedContentResponseSchema.parse>;
+    let generationChunk: GeminiWire_API_Generate_Content.Response;
     try {
-      generationChunk = geminiGeneratedContentResponseSchema.parse(wireGenerationChunk);
+      generationChunk = GeminiWire_API_Generate_Content.Response_schema.parse(wireGenerationChunk);
     } catch (error: any) {
       // log the malformed data to the console, and rethrow to transmit as 'error'
       console.log(`/api/llms/stream: Gemini parsing issue: ${error?.message || error}`, wireGenerationChunk);
@@ -455,7 +455,7 @@ function createStreamParserOpenAI(): AIStreamParser {
 
   return (data: string) => {
 
-    const json: OpenAIWire.ChatCompletion.ResponseStreamingChunk = JSON.parse(data);
+    const json = OpenAIWire_API_Chat_Completions.ChunkResponse_schema.parse(JSON.parse(data));
 
     // [OpenAI] an upstream error will be handled gracefully and transmitted as text (throw to transmit as 'error')
     if (json.error)
@@ -511,7 +511,7 @@ function _prepareRequestData({ access, model, history, context: _context }: Chat
 
     case 'gemini':
       return {
-        ...geminiAccess(access, model.id, geminiModelsStreamGenerateContentPath),
+        ...geminiAccess(access, model.id, GeminiWire_API_Generate_Content.streamingPostPath),
         body: geminiGenerateContentTextPayload(model, history, access.minSafetyLevel, 1),
         vendorMuxingFormat: 'sse',
         vendorStreamParser: createStreamParserGemini(model.id.replace('models/', '')),
@@ -531,8 +531,8 @@ function _prepareRequestData({ access, model, history, context: _context }: Chat
     case 'lmstudio':
     case 'localai':
     case 'mistral':
-    case 'oobabooga':
     case 'openai':
+    case 'openpipe':
     case 'openrouter':
     case 'perplexity':
     case 'togetherai':

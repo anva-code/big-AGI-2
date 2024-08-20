@@ -18,8 +18,9 @@ import { ROUTE_INDEX } from '~/common/app.routes';
 
 import { InvertedBar, InvertedBarCornerItem } from './components/InvertedBar';
 import { MobileNavListItem } from './MobileNavListItem';
-import { useOptimaDrawers } from './useOptimaDrawers';
-import { useOptimaLayout } from './useOptimaLayout';
+import { optimaCloseAppMenu, optimaOpenAppMenu, optimaOpenDrawer, optimaOpenPreferences, useOptimaAppMenu, useOptimaAppMenuOpen } from './useOptima';
+import { useOptimaPortalHasInputs } from './portals/useOptimaPortalHasInputs';
+import { useOptimaPortalOutRef } from './portals/useOptimaPortalOutRef';
 
 
 const PageBarItemsFallback = (props: { currentApp?: NavItemApp }) =>
@@ -38,17 +39,44 @@ const PageBarItemsFallback = (props: { currentApp?: NavItemApp }) =>
   </Box>;
 
 
+const centerItemsContainerSx: SxProps = {
+  flexGrow: 1,
+  minHeight: 'var(--Bar)',
+  display: 'flex', flexFlow: 'row wrap', justifyContent: 'center', alignItems: 'center',
+  my: 'auto',
+  gap: { xs: 0, md: 1 },
+  // [electron] make the blank part of the bar draggable (and not the contents)
+  WebkitAppRegion: 'drag',
+  '& > *': { WebkitAppRegion: 'no-drag' },
+};
+
+function CenterItemsPortal(props: {
+  currentApp?: NavItemApp,
+}) {
+
+  // state
+  const hasInputs = useOptimaPortalHasInputs('optima-portal-toolbar');
+  const portalToolbarRef = useOptimaPortalOutRef('optima-portal-toolbar', 'PageBar.CenterItemsContainer');
+
+  return (
+    <Box ref={portalToolbarRef} sx={centerItemsContainerSx}>
+      {hasInputs ? null : <PageBarItemsFallback currentApp={props.currentApp} />}
+    </Box>
+  );
+}
+
+
 function CommonPageMenuItems(props: { onClose: () => void }) {
 
   // external state
-  const { openPreferencesTab } = useOptimaLayout();
   const { mode: colorMode, setMode: setColorMode } = useColorScheme();
 
-  const handleShowSettings = (event: React.MouseEvent) => {
+  const { onClose } = props;
+  const handleShowSettings = React.useCallback((event: React.MouseEvent) => {
     event.stopPropagation();
-    openPreferencesTab();
-    props.onClose();
-  };
+    optimaOpenPreferences();
+    onClose();
+  }, [onClose]);
 
   const handleToggleDarkMode = (event: React.MouseEvent) => {
     event.stopPropagation();
@@ -89,29 +117,20 @@ function CommonPageMenuItems(props: { onClose: () => void }) {
 /**
  * The top bar of the application, with pluggable Left and Right menus, and Center component
  */
-export function PageBar(props: { component: React.ElementType, currentApp?: NavItemApp, isMobile?: boolean, sx?: SxProps }) {
+export function PageBar(props: { component: React.ElementType, currentApp?: NavItemApp, isMobile: boolean, sx?: SxProps }) {
 
   // state
   // const [value, setValue] = React.useState<ContainedAppType>('chat');
   const pageMenuAnchor = React.useRef<HTMLButtonElement>(null);
 
   // external state
-  const {
-    appBarItems, appDrawerContent, appMenuItems,
-  } = useOptimaLayout();
-  const {
-    openDrawer,
-    isPageMenuOpen, openPageMenu, closePageMenu,
-  } = useOptimaDrawers();
+  const hasDrawerContent = useOptimaPortalHasInputs('optima-portal-drawer');
+  const appMenuItems = useOptimaAppMenu();
+  const isAppMenuOpen = useOptimaAppMenuOpen();
 
   const commonPageMenuItems = React.useMemo(() => {
-    return <CommonPageMenuItems onClose={closePageMenu} />;
-  }, [closePageMenu]);
-
-  const handlePageContextMenu = React.useCallback((event: React.MouseEvent) => {
-    event.preventDefault(); // added for the Right mouse click (to prevent the menu)
-    openPageMenu();
-  }, [openPageMenu]);
+    return <CommonPageMenuItems onClose={optimaCloseAppMenu} />;
+  }, []);
 
   // [Desktop] hide the app bar if the current app doesn't use it
   const desktopHide = !!props.currentApp?.hideBar && !props.isMobile;
@@ -135,15 +154,15 @@ export function PageBar(props: { component: React.ElementType, currentApp?: NavI
     >
 
       {/* [Mobile] Drawer button */}
-      {(!!props.isMobile || !checkVisibleNav(props.currentApp)) && (
+      {(props.isMobile || !checkVisibleNav(props.currentApp)) && (
         <InvertedBarCornerItem>
 
-          {(!appDrawerContent || !checkVisibleNav(props.currentApp)) ? (
+          {(!hasDrawerContent || !checkVisibleNav(props.currentApp)) ? (
             <IconButton component={Link} href={ROUTE_INDEX} noLinkStyle>
               <ArrowBackIcon />
             </IconButton>
           ) : (
-            <IconButton disabled={!appDrawerContent} onClick={openDrawer}>
+            <IconButton disabled={!hasDrawerContent} onPointerDown={optimaOpenDrawer}>
               <MenuIcon />
             </IconButton>
           )}
@@ -151,30 +170,16 @@ export function PageBar(props: { component: React.ElementType, currentApp?: NavI
         </InvertedBarCornerItem>
       )}
 
-      {/* Center Items */}
-      <Box sx={{
-        flexGrow: 1,
-        minHeight: 'var(--Bar)',
-        display: 'flex', flexFlow: 'row wrap', justifyContent: 'center', alignItems: 'center',
-        my: 'auto',
-        gap: props.isMobile ? 0 : 1,
-        // [electron] make the blank part of the bar draggable (and not the contents)
-        WebkitAppRegion: 'drag',
-        '& > *': { WebkitAppRegion: 'no-drag' },
-      }}>
-        {appBarItems
-          ? appBarItems
-          : <PageBarItemsFallback currentApp={props.currentApp} />
-        }
-      </Box>
+      {/* Pluggable Toolbar Items */}
+      <CenterItemsPortal currentApp={props.currentApp} />
 
       {/* Page Menu Anchor */}
       <InvertedBarCornerItem>
         <IconButton
           ref={pageMenuAnchor}
           disabled={!pageMenuAnchor /*|| (!appMenuItems && !props.isMobile)*/}
-          onClick={openPageMenu}
-          onContextMenu={handlePageContextMenu}
+          onClick={optimaOpenAppMenu /* onPointerDown doesn't work well with a menu (the 'up' event would close it), so we're still with onClick */}
+          onContextMenu={optimaOpenAppMenu /* important to get the 'preventDefault' for the Right mouse click (to prevent the menu) */}
         >
           <MoreVertIcon />
         </IconButton>
@@ -185,10 +190,10 @@ export function PageBar(props: { component: React.ElementType, currentApp?: NavI
     {/*</Box>*/}
 
 
-    {/* Page Menu */}
+    {/* App (fka. Page) Menu */}
     <CloseableMenu
       dense maxHeightGapPx={56 + 24} noBottomPadding={props.isMobile} placement='bottom-end'
-      open={isPageMenuOpen && !!pageMenuAnchor.current} anchorEl={pageMenuAnchor.current} onClose={closePageMenu}
+      open={isAppMenuOpen && !!pageMenuAnchor.current} anchorEl={pageMenuAnchor.current} onClose={optimaCloseAppMenu}
       sx={{ minWidth: 280 }}
     >
 
@@ -200,8 +205,8 @@ export function PageBar(props: { component: React.ElementType, currentApp?: NavI
       {!!appMenuItems && <Box sx={{ overflowY: 'auto' }}>{appMenuItems}</Box>}
 
       {/* [Mobile] Nav is implemented at the bottom of the Page Menu (for now) */}
-      {!!props.isMobile && !!appMenuItems && <ListDivider sx={{ mb: 0 }} />}
-      {!!props.isMobile && <MobileNavListItem variant='solid' currentApp={props.currentApp} />}
+      {props.isMobile && !!appMenuItems && <ListDivider sx={{ mb: 0 }} />}
+      {props.isMobile && <MobileNavListItem variant='solid' currentApp={props.currentApp} />}
 
     </CloseableMenu>
 

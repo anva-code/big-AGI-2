@@ -5,25 +5,26 @@ import { useQuery } from '@tanstack/react-query';
 import { Box, Button, Card, CardContent, Divider, Input, Typography } from '@mui/joy';
 import WarningRoundedIcon from '@mui/icons-material/WarningRounded';
 
-import { createConversationFromJsonV1 } from '~/modules/trade/trade.client';
 import { forgetChatLinkItem, useSharedChatLinkItems } from '~/modules/trade/link/store-link';
 
 import { Brand } from '~/common/app.config';
 import { ConfirmationModal } from '~/common/components/ConfirmationModal';
+import { DataAtRestV1 } from '~/common/stores/chat/chats.converters';
 import { GoodModal } from '~/common/components/GoodModal';
 import { InlineError } from '~/common/components/InlineError';
 import { LogoProgress } from '~/common/components/LogoProgress';
+import { OptimaDrawerIn } from '~/common/layout/optima/portals/OptimaPortalsIn';
+import { addSnackbar } from '~/common/components/snackbar/useSnackbarsStore';
 import { apiAsyncNode } from '~/common/util/trpc.client';
 import { capitalizeFirstLetter } from '~/common/util/textUtils';
-import { conversationTitle } from '~/common/state/store-chats';
+import { conversationTitle } from '~/common/stores/chat/chat.conversation';
+import { navigateToChatLinkList } from '~/common/app.routes';
 import { themeBgAppDarker } from '~/common/app.theme';
-import { usePluggableOptimaLayout } from '~/common/layout/optima/useOptimaLayout';
+import { useSetOptimaAppMenu } from '~/common/layout/optima/useOptima';
 
 import { LinkChatDrawer } from './LinkChatDrawer';
 import { LinkChatPageMenuItems } from './LinkChatPageMenuItems';
 import { LinkChatViewer } from './LinkChatViewer';
-import { addSnackbar } from '~/common/components/useSnackbarsStore';
-import { navigateToChatLinkList } from '~/common/app.routes';
 
 
 const SPECIAL_LIST_PAGE_ID = 'list';
@@ -89,7 +90,7 @@ async function fetchStoredChatV1(objectId: string | null) {
     throw new Error('Unsupported data type: ' + dataType);
 
   // convert to DConversation
-  const restored = createConversationFromJsonV1(dataObject as any);
+  const restored = DataAtRestV1.recreateConversation(dataObject as any);
   if (!restored)
     throw new Error('Could not restore conversation');
 
@@ -109,11 +110,10 @@ export function AppLinkChat(props: { chatLinkId: string | null }) {
 
   // external state
   const sharedChatLinkItems = useSharedChatLinkItems();
-  const { data, isError, error, isLoading } = useQuery({
+  const { data, isError, error, isPending } = useQuery({
     enabled: !!linkId,
     queryKey: ['chat-link', linkId],
     queryFn: () => fetchStoredChatV1(linkId),
-    refetchOnWindowFocus: false,
     staleTime: 1000 * 60 * 60 * 24, // 24 hours
   });
 
@@ -197,7 +197,7 @@ export function AppLinkChat(props: { chatLinkId: string | null }) {
     onDeleteLink={handleConfirmDeletion}
   />, [handleConfirmDeletion, linkId]);
 
-  usePluggableOptimaLayout(drawerContent, null, pageMenuItems, 'AppChatLink');
+  useSetOptimaAppMenu(pageMenuItems, 'AppChatLink');
 
 
   return <>
@@ -206,9 +206,11 @@ export function AppLinkChat(props: { chatLinkId: string | null }) {
       <title>{capitalizeFirstLetter(pageTitle)} · {Brand.Title.Base} 🚀</title>
     </Head>
 
+    <OptimaDrawerIn>{drawerContent}</OptimaDrawerIn>
+
     {isListPage
       ? <ListPlaceholder hasLinks={hasLinks} />
-      : isLoading
+      : isPending
         ? <ShowLoading />
         : isError
           ? <ShowError error={error} />

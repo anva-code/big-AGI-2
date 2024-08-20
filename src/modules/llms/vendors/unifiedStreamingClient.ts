@@ -1,12 +1,11 @@
+import type { DLLMId } from '~/common/stores/llms/llms.types';
 import { apiAsync } from '~/common/util/trpc.client';
 import { frontendSideFetch } from '~/common/util/clientFetchers';
 
 import type { ChatStreamingInputSchema, ChatStreamingPreambleModelSchema, ChatStreamingPreambleStartSchema } from '../server/llm.server.streaming';
-import type { DLLMId } from '../store-llms';
 import type { VChatContextRef, VChatFunctionIn, VChatMessageIn, VChatStreamContextName } from '../llm.client';
 
 import type { OpenAIAccessSchema } from '../server/openai/openai.router';
-import type { OpenAIWire } from '../server/openai/openai.wiretypes';
 
 
 export type StreamingClientUpdate = Partial<{
@@ -24,7 +23,7 @@ export type StreamingClientUpdate = Partial<{
  *
  * NOTE: onUpdate is callback when a piece of a message (text, model name, typing..) is received
  */
-export async function unifiedStreamingClient<TSourceSetup = unknown, TLLMOptions = unknown>(
+export async function unifiedStreamingClient<TLLMOptions = unknown>(
   access: ChatStreamingInputSchema['access'],
   llmId: DLLMId,
   llmOptions: TLLMOptions,
@@ -149,7 +148,7 @@ async function _openAIModerationCheck(access: OpenAIAccessSchema, lastMessage: V
     return null;
 
   try {
-    const moderationResult: OpenAIWire.Moderation.Response = await apiAsync.llmOpenAI.moderation.mutate({
+    const moderationResult = await apiAsync.llmOpenAI.moderation.mutate({
       access, text: lastMessage.content,
     });
     const issues = moderationResult.results.reduce((acc, result) => {

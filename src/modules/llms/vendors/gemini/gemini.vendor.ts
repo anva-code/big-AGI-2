@@ -2,7 +2,7 @@ import { GeminiIcon } from '~/common/components/icons/vendors/GeminiIcon';
 import { apiAsync } from '~/common/util/trpc.client';
 
 import type { GeminiAccessSchema } from '../../server/gemini/gemini.router';
-import type { GeminiBlockSafetyLevel } from '../../server/gemini/gemini.wiretypes';
+import type { GeminiWire_Safety } from '~/modules/aix/server/dispatch/wiretypes/gemini.wiretypes';
 import type { IModelVendor } from '../IModelVendor';
 import type { VChatContextRef, VChatGenerateContextName, VChatMessageOut } from '../../llm.client';
 import { unifiedStreamingClient } from '../unifiedStreamingClient';
@@ -10,15 +10,15 @@ import { unifiedStreamingClient } from '../unifiedStreamingClient';
 import { FALLBACK_LLM_RESPONSE_TOKENS, FALLBACK_LLM_TEMPERATURE } from '../openai/openai.vendor';
 import { OpenAILLMOptions } from '../openai/OpenAILLMOptions';
 
-import { GeminiSourceSetup } from './GeminiSourceSetup';
+import { GeminiServiceSetup } from './GeminiServiceSetup';
 
 
-export interface SourceSetupGemini {
+interface DGeminiServiceSettings {
   geminiKey: string;
-  minSafetyLevel: GeminiBlockSafetyLevel;
+  minSafetyLevel: GeminiWire_Safety.HarmBlockThreshold;
 }
 
-export interface LLMOptionsGemini {
+interface LLMOptionsGemini {
   llmRef: string;
   stopSequences: string[];  // up to 5 sequences that will stop generation (optional)
   candidateCount: number;   // 1...8 number of generated responses to return (optional)
@@ -29,7 +29,7 @@ export interface LLMOptionsGemini {
 }
 
 
-export const ModelVendorGemini: IModelVendor<SourceSetupGemini, GeminiAccessSchema, LLMOptionsGemini> = {
+export const ModelVendorGemini: IModelVendor<DGeminiServiceSettings, GeminiAccessSchema, LLMOptionsGemini> = {
   id: 'googleai',
   name: 'Gemini',
   rank: 11,
@@ -39,7 +39,7 @@ export const ModelVendorGemini: IModelVendor<SourceSetupGemini, GeminiAccessSche
 
   // components
   Icon: GeminiIcon,
-  SourceSetupComponent: GeminiSourceSetup,
+  ServiceSetupComponent: GeminiServiceSetup,
   LLMOptionsComponent: OpenAILLMOptions,
 
   // functions

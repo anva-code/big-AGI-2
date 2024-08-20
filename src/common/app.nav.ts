@@ -7,6 +7,7 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import CallIcon from '@mui/icons-material/Call';
 import CallOutlinedIcon from '@mui/icons-material/CallOutlined';
+import DifferenceOutlinedIcon from '@mui/icons-material/DifferenceOutlined';
 import Diversity2Icon from '@mui/icons-material/Diversity2';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import EventNoteOutlinedIcon from '@mui/icons-material/EventNoteOutlined';
@@ -109,15 +110,14 @@ export const navItems: {
     },
     {
       name: 'Draw',
-      barTitle: 'Generate Images',
       icon: FormatPaintOutlinedIcon,
       iconActive: FormatPaintTwoToneIcon,
       type: 'app',
       route: '/draw',
-      // hideOnMobile: true,
       hideDrawer: true,
-      isDev: true,
-      _delete: true,
+      // hideOnMobile: true,
+      // isDev: true,
+      // _delete: true,
     },
     {
       name: 'Cortex',
@@ -164,7 +164,16 @@ export const navItems: {
       hideBar: true,
     },
     {
-      name: 'Tokenize',
+      name: 'Compare Text',
+      barTitle: 'Comparison',
+      icon: DifferenceOutlinedIcon,
+      type: 'app',
+      route: '/diff',
+      hideDrawer: true,
+    },
+    {
+      name: 'Tokenize Text',
+      barTitle: 'Tokenization',
       icon: GrainIcon,
       type: 'app',
       route: '/tokens',

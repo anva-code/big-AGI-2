@@ -4,10 +4,11 @@ import { Box, Button, Checkbox, IconButton, ListItem, Sheet, Typography } from '
 import ClearIcon from '@mui/icons-material/Clear';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 
-import { DMessage } from '~/common/state/store-chats';
+import { DMessage, messageFragmentsReduceText } from '~/common/stores/chat/chat.message';
 
-import { TokenBadgeMemo } from '../composer/TokenBadge';
-import { makeAvatar, messageBackground } from './ChatMessage';
+import { TokenBadgeMemo } from '../composer/tokens/TokenBadge';
+import { isErrorChatMessage } from './explainServiceErrors';
+import { makeMessageAvatarIcon, messageBackground } from './messageUtils';
 
 
 /**
@@ -15,9 +16,11 @@ import { makeAvatar, messageBackground } from './ChatMessage';
  */
 export const MessagesSelectionHeader = (props: { hasSelected: boolean, sumTokens: number, onClose: () => void, onSelectAll: (selected: boolean) => void, onDeleteMessages: () => void }) =>
   <Sheet color='warning' variant='solid' invertedColors sx={{
-    display: 'flex', flexDirection: 'row', alignItems: 'center',
-    position: 'fixed', top: 0, left: 0, right: 0, zIndex: 101 /* Cleanup Selection Header on top of messages */,
+    position: 'sticky', top: 0, left: 0, right: 0, zIndex: 101 /* Cleanup Selection Header on top of messages */,
     boxShadow: 'md',
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: { xs: 1, sm: 2 }, px: { xs: 1, md: 2 }, py: 1,
   }}>
     <Checkbox size='md' onChange={event => props.onSelectAll(event.target.checked)} sx={{ minWidth: 24, justifyContent: 'center' }} />
@@ -44,10 +47,7 @@ export function CleanerMessage(props: { message: DMessage, selected: boolean, re
   // derived state
   const {
     id: messageId,
-    text: messageText,
-    sender: messageSender,
-    avatar: messageAvatar,
-    typing: messageTyping,
+    pendingIncomplete: messagePendingIncomplete,
     role: messageRole,
     purposeId: messagePurposeId,
     originLLM: messageOriginLLM,
@@ -55,15 +55,17 @@ export function CleanerMessage(props: { message: DMessage, selected: boolean, re
     updated: messageUpdated,
   } = props.message;
 
+  const messageText = messageFragmentsReduceText(props.message.fragments);
+
   const fromAssistant = messageRole === 'assistant';
 
-  const isAssistantError = fromAssistant && (messageText.startsWith('[Issue] ') || messageText.startsWith('[OpenAI Issue]'));
+  const isAssistantError = fromAssistant && isErrorChatMessage(messageText);
 
   const backgroundColor = messageBackground(messageRole, !!messageUpdated, isAssistantError);
 
-  const avatarEl: React.JSX.Element | null = React.useMemo(() =>
-      makeAvatar(messageAvatar, messageRole, messageOriginLLM, messagePurposeId, messageSender, messageTyping, 'sm'),
-    [messageAvatar, messageOriginLLM, messagePurposeId, messageRole, messageSender, messageTyping],
+  const avatarIconEl: React.JSX.Element | null = React.useMemo(() =>
+      makeMessageAvatarIcon('pro', messageRole, messageOriginLLM, messagePurposeId, !!messagePendingIncomplete),
+    [messageOriginLLM, messagePendingIncomplete, messagePurposeId, messageRole],
   );
 
   const handleCheckedChange = (event: React.ChangeEvent<HTMLInputElement>) =>
@@ -85,7 +87,7 @@ export function CleanerMessage(props: { message: DMessage, selected: boolean, re
       </Box>}
 
       <Box sx={{ display: { xs: 'none', sm: 'flex' }, minWidth: { xs: 40, sm: 48 }, justifyContent: 'center' }}>
-        {avatarEl}
+        {avatarIconEl}
       </Box>
 
       <Typography level='body-sm' sx={{ minWidth: 64 }}>

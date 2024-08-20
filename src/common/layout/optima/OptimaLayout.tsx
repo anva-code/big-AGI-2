@@ -3,15 +3,31 @@ import { useRouter } from 'next/router';
 import { PanelGroup } from 'react-resizable-panels';
 
 import { checkVisibleNav, navItems } from '~/common/app.nav';
+import { isMacUser } from '~/common/util/pwaUtils';
+import { useGlobalShortcuts } from '~/common/components/shortcuts/useGlobalShortcuts';
 import { useIsMobile } from '~/common/components/useMatchMedia';
+import { useUIPreferencesStore } from '~/common/state/store-ui';
 
 import { DesktopDrawer } from './DesktopDrawer';
 import { DesktopNav } from './DesktopNav';
 import { MobileDrawer } from './MobileDrawer';
 import { Modals } from './Modals';
-import { OptimaDrawerProvider } from './useOptimaDrawers';
-import { OptimaLayoutProvider } from './useOptimaLayout';
 import { PageWrapper } from './PageWrapper';
+import { optimaActions, optimaOpenModels, optimaOpenPreferences } from './useOptima';
+
+
+// this undoes the PanelGroup styling on mobile, as it's not needed
+// NOTE: there may be benefits with the PanelGroup layout, namely that
+// it's already 100% x 100% and doesn't scroll, so there would be no
+// chance of overflow, and outer limits are set here
+const undoPanelGroupSx: React.CSSProperties = {
+  display: 'block',
+  marginLeft: undefined,
+  marginRight: undefined,
+  width: undefined,
+  height: undefined,
+  overflow: undefined,
+};
 
 
 /**
@@ -34,41 +50,39 @@ export function OptimaLayout(props: { suspendAutoModelsSetup?: boolean, children
   // derived state
   const currentApp = navItems.apps.find(item => item.route === route);
 
-  return (
-    <OptimaLayoutProvider>
-      <OptimaDrawerProvider>
+  // global shortcuts for Optima
+  useGlobalShortcuts('OptimaApp', React.useMemo(() => [
+    // Preferences & Model dialogs
+    { key: ',', ctrl: true, action: optimaOpenPreferences },
+    { key: 'm', ctrl: true, shift: true, action: optimaOpenModels },
+    // Font Scale
+    { key: '+', ctrl: true, shift: true, action: useUIPreferencesStore.getState().increaseContentScaling },
+    { key: '-', ctrl: true, shift: true, action: useUIPreferencesStore.getState().decreaseContentScaling },
+    // Shortcuts
+    { key: isMacUser ? '/' : '?', ctrl: true, shift: true, action: optimaActions().openKeyboardShortcuts },
+    { key: 'h', ctrl: true, shift: true, action: '_specialPrintShortcuts' },
+  ], []));
 
-        {isMobile ? <>
+  return <>
 
-          <PageWrapper component='main' isMobile currentApp={currentApp}>
-            {props.children}
-          </PageWrapper>
+    <PanelGroup direction='horizontal' id='root-layout' style={isMobile ? undoPanelGroupSx : undefined}>
 
-          <MobileDrawer component='aside' currentApp={currentApp} />
+      {!isMobile && checkVisibleNav(currentApp) && <DesktopNav component='nav' currentApp={currentApp} />}
 
-        </> : (
+      {!isMobile && <DesktopDrawer key='optima-drawer' component='aside' currentApp={currentApp} />}
 
-          <PanelGroup direction='horizontal' id='root-layout'>
+      {/*<Panel defaultSize={100}>*/}
+      <PageWrapper key='app-page-wrapper' component='main' isMobile={isMobile} currentApp={currentApp}>
+        {props.children}
+      </PageWrapper>
+      {/*</Panel>*/}
 
-            {checkVisibleNav(currentApp) && <DesktopNav component='nav' currentApp={currentApp} />}
+      {isMobile && <MobileDrawer key='optima-drawer' component='aside' currentApp={currentApp} />}
 
-            <DesktopDrawer component='aside' currentApp={currentApp} />
+    </PanelGroup>
 
-            {/*<Panel defaultSize={100}>*/}
-            <PageWrapper component='main' currentApp={currentApp}>
-              {props.children}
-            </PageWrapper>
-            {/*</Panel>*/}
+    {/* Overlay Modals */}
+    <Modals suspendAutoModelsSetup={props.suspendAutoModelsSetup} />
 
-          </PanelGroup>
-
-        )}
-
-      </OptimaDrawerProvider>
-
-      {/* Overlay Modals */}
-      <Modals suspendAutoModelsSetup={props.suspendAutoModelsSetup} />
-
-    </OptimaLayoutProvider>
-  );
+  </>;
 }

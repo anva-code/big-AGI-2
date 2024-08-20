@@ -6,14 +6,15 @@ import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 
 import { Brand } from '~/common/app.config';
 import { ConfirmationModal } from '~/common/components/ConfirmationModal';
+import { DataAtRestV1 } from '~/common/stores/chat/chats.converters';
 import { Link } from '~/common/components/Link';
-import { addSnackbar } from '~/common/components/useSnackbarsStore';
+import { addSnackbar } from '~/common/components/snackbar/useSnackbarsStore';
 import { apiAsyncNode } from '~/common/util/trpc.client';
-import { conversationTitle, DConversationId, getConversation } from '~/common/state/store-chats';
+import { conversationTitle, DConversationId } from '~/common/stores/chat/chat.conversation';
+import { getConversation } from '~/common/stores/chat/store-chats';
 
 import type { StoragePutSchema, StorageUpdateDeletionKeySchema } from '../server/link';
 import { ChatLinkDetails } from './ChatLinkDetails';
-import { conversationToJsonV1 } from '../trade.client';
 import { rememberChatLinkItem, updateChatLinkDeletionKey, useLinkStorageOwnerId } from './store-link';
 
 
@@ -45,7 +46,7 @@ export function ChatLinkExport(props: {
 
     setIsUploading(true);
     try {
-      const chatV1 = conversationToJsonV1(conversation);
+      const chatV1 = DataAtRestV1.formatChatToJsonV1(conversation);
       const chatTitle = conversationTitle(conversation) || undefined;
       const response: StoragePutSchema = await apiAsyncNode.trade.storagePut.mutate({
         ownerId: linkStorageOwnerId,
